@@ -13,3 +13,23 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 추가: 민감 정보 및 로컬 환경 파일 무시
+# Keystore / signing
+*.jks
+*.keystore
+debug.keystore
+keystore.properties
+
+# Firebase / Google services
+google-services.json
+
+# Environment files
+.env
+.env.*
+
+# Editor/IDE
+.vscode/
+
+# Gradle wrapper and caches (이미 일부 포함되어 있을 수 있음)
+.gradle/
