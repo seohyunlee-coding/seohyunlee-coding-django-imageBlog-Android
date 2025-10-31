@@ -10,6 +10,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.appbar.MaterialToolbar;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -28,6 +30,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import android.text.Html;
+
 public class MainActivate extends AppCompatActivity {
     private static final String TAG = "MainActivate";
     TextView textView;
@@ -40,6 +44,17 @@ public class MainActivate extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activate_main); // 레이아웃 이름 수정
+
+        // Toolbar를 레이아웃에서 찾아서 지원 액션바로 설정
+        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) {
+                // 기본 타이틀은 숨기고 커스텀 TextView로 대체
+                getSupportActionBar().setDisplayShowTitleEnabled(false);
+            }
+        }
+
         textView = findViewById(R.id.textView);
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -215,7 +230,11 @@ public class MainActivate extends AppCompatActivity {
             textView.setText(display);
             Log.d(TAG, "onPostsFetched: 게시글 없음, rawJson shown");
         } else {
-            textView.setText("동기화 완료: " + posts.size() + "개");
+            // Show '동기화의 인포: X개' with the count highlighted in dark gray
+            String coloredCount = "<b><font color='@color/purple_500'>" + posts.size() + "개</font></b>";
+            // Html doesn't resolve @color, so use hex from colors.xml (purple_500 = #FF6200EE)
+            String html = "이미지 로드 성공!&nbsp;&nbsp;&nbsp; 총 글 개수: <b><font color='#FF424242'>" + posts.size() + "개</font></b>";
+            textView.setText(Html.fromHtml(html), TextView.BufferType.SPANNABLE);
             ImageAdapter adapter = new ImageAdapter(posts);
             recyclerView.setAdapter(adapter);
             Log.d(TAG, "onPostsFetched: RecyclerView에 adapter 적용 완료");

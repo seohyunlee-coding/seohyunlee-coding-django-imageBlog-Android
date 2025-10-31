@@ -1,45 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingTop="?attr/actionBarSize"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
     tools:context=".MainActivate">
-    <LinearLayout
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="32dp"
-        android:gravity="center_vertical">
+        android:layout_height="110dp"
+        android:background="@color/white"
+        android:elevation="0dp">
 
-        <Button
-            android:id="@+id/btn_load"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:onClick="onClickDownload"
-            android:text="@string/btn_sync" />
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
 
-        <Button
-            android:id="@+id/btn_save"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:onClick="onClickUpload"
-            android:text="@string/btn_new_post" />
-    </LinearLayout>
+            <!-- 타이틀 -->
+            <TextView
+                android:id="@+id/toolbar_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="image\nblog"
+                android:lines="2"
+                android:ellipsize="end"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-black"
+                android:textSize="38sp"
+                android:lineSpacingExtra="-6dp"
+                android:textColor="@color/black"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"/>
+
+            <!-- 버튼 그룹 -->
+            <LinearLayout
+                android:id="@+id/button_group"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginEnd="15dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
+
+                <!-- 동기화 버튼 -->
+                <com.google.android.material.button.MaterialButton
+                    android:layout_width="wrap_content"
+                    android:layout_height="53dp"
+                    android:onClick="onClickDownload"
+                    android:text="@string/btn_sync"
+                    android:textColor="@color/black"
+                    android:textSize="16sp"
+                    app:backgroundTint="@android:color/white"
+                    app:cornerRadius="10dp"
+                    app:strokeColor="@color/light_gray"
+                    app:strokeWidth="1dp"
+                    android:layout_marginEnd="8dp"
+                    android:elevation="0dp"
+                    app:pressedTranslationZ="4dp"/>
+
+                <!-- 새 글 버튼 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="53dp"
+                    android:onClick="onClickUpload"
+                    android:text="@string/btn_new_post"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    app:backgroundTint="@color/button_dark"
+                    app:cornerRadius="10dp"
+                    app:strokeColor="@color/button_dark"
+                    app:strokeWidth="0dp"
+                    android:elevation="0dp"
+                    app:pressedTranslationZ="6dp"/>
+
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </com.google.android.material.appbar.MaterialToolbar>
+
+    <!-- thin divider under toolbar -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#FFDDDDDD" />
+
     <TextView
         android:id="@+id/textView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/placeholder_text"
         android:textColor="@android:color/black"
-        android:textSize="16sp"
-        android:padding="8dp" />
+        android:textSize="14sp"
+        android:paddingTop="20dp"
+        android:paddingBottom="12dp"
+        android:paddingStart="13dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
@@ -49,4 +112,5 @@
         android:layout_weight="1"
         android:background="@android:color/transparent"
         android:orientation="vertical" />
+
 </LinearLayout>
