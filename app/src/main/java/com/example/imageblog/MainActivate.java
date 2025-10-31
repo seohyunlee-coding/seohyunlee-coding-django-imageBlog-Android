@@ -7,6 +7,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.text.Spanned;
 import android.content.Intent;
+import android.view.inputmethod.EditorInfo;
+import android.view.KeyEvent;
+import android.widget.EditText;
+import android.widget.ImageButton;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.text.HtmlCompat;
@@ -41,6 +45,8 @@ public class MainActivate extends AppCompatActivity {
     RecyclerView recyclerView;
     MaterialButton btnLoad;
     MaterialButton btnSave;
+    EditText etSearch; // 추가: 검색 입력
+    ImageButton btnSearch; // 추가: 검색 버튼
     String site_url = "https://cwijiq.pythonanywhere.com"; // 변경된 API 호스트
     Thread fetchThread;
     String lastRawJson = null; // 디버깅용으로 원시 JSON을 저장
@@ -67,6 +73,18 @@ public class MainActivate extends AppCompatActivity {
         // 버튼 참조 (XML의 onClick은 그대로 사용)
         btnLoad = findViewById(R.id.btn_load);
         btnSave = findViewById(R.id.btn_save);
+
+        // 검색 뷰 초기화
+        etSearch = findViewById(R.id.etSearch);
+        btnSearch = findViewById(R.id.btn_search);
+        btnSearch.setOnClickListener(v -> performSearch());
+        etSearch.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER)) {
+                performSearch();
+                return true;
+            }
+            return false;
+        });
 
         // ...changed: 초기에는 게시글을 즉시 불러오지 않고, RecyclerView를 숨깁니다...
         recyclerView.setVisibility(View.GONE);
@@ -253,6 +271,10 @@ public class MainActivate extends AppCompatActivity {
                 btnLoad.setEnabled(true);
                 btnLoad.setAlpha(1f);
             }
+            if (btnSearch != null) {
+                btnSearch.setEnabled(true);
+                btnSearch.setAlpha(1f);
+            }
             Log.d(TAG, "onPostsFetched: 게시글 없음, rawJson shown");
         } else {
             String html = "이미지 로드 성공! &nbsp;&nbsp;&nbsp; 총 글 개수: <b><font color='#FF424242'>" + posts.size() + "개</font></b>";
@@ -266,6 +288,10 @@ public class MainActivate extends AppCompatActivity {
             if (btnLoad != null) {
                 btnLoad.setEnabled(true);
                 btnLoad.setAlpha(1f);
+            }
+            if (btnSearch != null) {
+                btnSearch.setEnabled(true);
+                btnSearch.setAlpha(1f);
             }
             Log.d(TAG, "onPostsFetched: RecyclerView에 adapter 적용 완료");
         }
@@ -287,6 +313,38 @@ public class MainActivate extends AppCompatActivity {
                 btnLoad.setAlpha(0.6f);
             }
             startFetch(site_url + "/api/posts");
+        }
+    }
+
+    // 검색 실행: etSearch의 텍스트로 search API 호출
+    private void performSearch() {
+        String q = etSearch == null ? "" : etSearch.getText().toString().trim();
+        if (q.isEmpty()) {
+            Toast.makeText(this, "검색어를 입력하세요.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            String enc = java.net.URLEncoder.encode(q, "UTF-8");
+            String searchUrl = site_url + "/api/posts/search/?q=" + enc;
+            Log.d(TAG, "performSearch: url=" + searchUrl);
+            if (fetchThread != null && fetchThread.isAlive()) {
+                fetchThread.interrupt();
+            }
+            // UI 상태
+            recyclerView.setVisibility(View.GONE);
+            textView.setText("검색 중...");
+            if (btnLoad != null) {
+                btnLoad.setEnabled(false);
+                btnLoad.setAlpha(0.6f);
+            }
+            if (btnSearch != null) {
+                btnSearch.setEnabled(false);
+                btnSearch.setAlpha(0.6f);
+            }
+            startFetch(searchUrl);
+        } catch (Exception e) {
+            Log.w(TAG, "performSearch: encoding failed", e);
+            Toast.makeText(this, "검색어 인코딩 오류", Toast.LENGTH_SHORT).show();
         }
     }
 }

@@ -23,6 +23,7 @@ import java.util.Locale;
 
 public class PostDetailActivity extends AppCompatActivity {
     private static final String TAG = "PostDetailActivity";
+    private static final int REQ_EDIT_POST = 2001; // 추가: 편집 요청 코드
     private int postId = -1; // 게시글 id 저장
 
     @Override
@@ -92,7 +93,8 @@ public class PostDetailActivity extends AppCompatActivity {
                 editIntent.putExtra("title", title == null ? "" : title);
                 editIntent.putExtra("text", text == null ? "" : text);
                 editIntent.putExtra("image", image == null ? "" : image);
-                startActivity(editIntent);
+                // startActivityForResult로 열어 편집 완료 시 결과를 받을 수 있게 함
+                startActivityForResult(editIntent, REQ_EDIT_POST);
             });
 
             btnDelete.setOnClickListener(v -> {
@@ -107,6 +109,18 @@ public class PostDetailActivity extends AppCompatActivity {
                         })
                         .show();
             });
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_EDIT_POST) {
+            if (resultCode == RESULT_OK) {
+                // 편집이 성공적으로 완료되었음을 상위(MainActivate)로 전달하기 위해 RESULT_OK로 종료
+                setResult(RESULT_OK);
+                finish();
+            }
         }
     }
 
