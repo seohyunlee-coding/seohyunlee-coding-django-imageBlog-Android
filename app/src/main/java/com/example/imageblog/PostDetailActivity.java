@@ -6,6 +6,8 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.view.View;
+import android.util.Log;
+import android.widget.Toast; // 추가: Toast import
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -13,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 import com.bumptech.glide.request.RequestOptions;
-import com.example.imageblog.R;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -21,6 +22,9 @@ import java.util.Date;
 import java.util.Locale;
 
 public class PostDetailActivity extends AppCompatActivity {
+    private static final String TAG = "PostDetailActivity";
+    private int postId = -1; // 게시글 id 저장
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -41,6 +45,9 @@ public class PostDetailActivity extends AppCompatActivity {
             String text = intent.getStringExtra("text");
             String published = intent.getStringExtra("published");
             String image = intent.getStringExtra("image");
+            postId = intent.getIntExtra("id", -1);
+
+            Log.d(TAG, "open detail for id=" + postId + ", title=" + title);
 
             headerTitle.setText(title == null ? "" : title);
             bodyView.setText(text == null ? "" : text);
@@ -73,21 +80,101 @@ public class PostDetailActivity extends AppCompatActivity {
                 labelBody.setVisibility(View.VISIBLE);
                 bodyView.setVisibility(View.VISIBLE);
             }
+
+            // 추가: 수정/삭제 버튼 처리
+            android.widget.Button btnEdit = findViewById(R.id.btnEditPost);
+            android.widget.Button btnDelete = findViewById(R.id.btnDeletePost);
+
+            btnEdit.setOnClickListener(v -> {
+                // 편집 화면으로 이동: 기존 데이터를 전달
+                android.content.Intent editIntent = new android.content.Intent(this, NewPostActivity.class);
+                editIntent.putExtra("id", postId);
+                editIntent.putExtra("title", title == null ? "" : title);
+                editIntent.putExtra("text", text == null ? "" : text);
+                editIntent.putExtra("image", image == null ? "" : image);
+                startActivity(editIntent);
+            });
+
+            btnDelete.setOnClickListener(v -> {
+                // 삭제 확인 다이얼로그
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("게시글 삭제")
+                        .setMessage("정말 이 게시글을 삭제하시겠습니까?")
+                        .setNegativeButton("취소", (d, which) -> d.dismiss())
+                        .setPositiveButton("삭제", (d, which) -> {
+                            // DELETE 호출
+                            performDeletePost(postId);
+                        })
+                        .show();
+            });
         }
+    }
+
+    private void performDeletePost(int id) {
+        if (id < 0) {
+            Toast.makeText(this, "유효하지 않은 게시글입니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final String deleteUrl = "https://cwijiq.pythonanywhere.com/api_root/Post/" + id + "/";
+        Toast.makeText(this, "삭제 요청중...", Toast.LENGTH_SHORT).show();
+
+        new Thread(() -> {
+            java.net.HttpURLConnection conn = null;
+            try {
+                java.net.URL url = new java.net.URL(deleteUrl);
+                conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("DELETE");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setDoInput(true);
+
+                int code = conn.getResponseCode();
+                Log.d(TAG, "DELETE response code=" + code);
+
+                runOnUiThread(() -> {
+                    if (code == java.net.HttpURLConnection.HTTP_NO_CONTENT || code == java.net.HttpURLConnection.HTTP_OK) {
+                        Toast.makeText(PostDetailActivity.this, "삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                        finish();
+                    } else {
+                        String msg = "삭제 실패: HTTP " + code;
+                        Toast.makeText(PostDetailActivity.this, msg, Toast.LENGTH_LONG).show();
+                    }
+                });
+
+            } catch (Exception e) {
+                Log.e(TAG, "performDeletePost failed", e);
+                runOnUiThread(() -> Toast.makeText(PostDetailActivity.this, "삭제 중 오류가 발생했습니다: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
     }
 
     // 날짜 문자열을 "2025년 10월 9일 9:31 오전" 형식으로 변환
     private String formatDateString(String rawDate) {
-        // 입력 예: 2025-10-09T09:31:00 또는 2025-10-09 09:31:00
-        String patternIn = rawDate.contains("T") ? "yyyy-MM-dd'T'HH:mm:ss" : "yyyy-MM-dd HH:mm:ss";
+        if (rawDate == null || rawDate.isEmpty()) return "";
+        String trimmed = rawDate;
+        try {
+            if (trimmed.length() > 19 && trimmed.charAt(19) != ' ') {
+                trimmed = trimmed.substring(0, 19);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        String patternIn = trimmed.contains("T") ? "yyyy-MM-dd'T'HH:mm:ss" : "yyyy-MM-dd HH:mm:ss";
         SimpleDateFormat inputFormat = new SimpleDateFormat(patternIn, Locale.getDefault());
         SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy년 M월 d일 h:mm a", Locale.KOREAN);
 
         try {
-            Date date = inputFormat.parse(rawDate);
-            return outputFormat.format(date);
+            Date date = inputFormat.parse(trimmed);
+            if (date != null) {
+                return outputFormat.format(date);
+            } else {
+                return rawDate;
+            }
         } catch (ParseException e) {
-            e.printStackTrace();
+            Log.w(TAG, "formatDateString: failed to parse date='" + rawDate + "'", e);
             return rawDate;
         }
     }

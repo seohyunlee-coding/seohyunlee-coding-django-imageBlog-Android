@@ -69,7 +69,13 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
             intent.putExtra("text", post.getText() == null ? "" : post.getText());
             intent.putExtra("published", post.getPublishedDate() == null ? "" : post.getPublishedDate());
             intent.putExtra("image", post.getImageUrl() == null ? "" : post.getImageUrl());
-            ctx.startActivity(intent);
+            intent.putExtra("id", post.getId());
+            // Activity 컨텍스트이면 startActivityForResult로 열어 삭제/수정 후 결과를 받을 수 있게 함
+            if (ctx instanceof android.app.Activity) {
+                ((android.app.Activity) ctx).startActivityForResult(intent, MainActivate.REQ_VIEW_POST);
+            } else {
+                ctx.startActivity(intent);
+            }
         });
     }
 
@@ -80,11 +86,24 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
 
     // 날짜 문자열을 "2025년 10월 9일 9:31 오후" 형식으로 변환
     private String formatDateString(String rawDate) {
+        // rawDate에 timezone(+09:00 또는 Z) 정보가 붙어있을 수 있으므로 초(second)까지의 부분만 파싱 시도
+        if (rawDate == null || rawDate.isEmpty()) return "";
+        String trimmed = rawDate;
+        try {
+            // ISO 8601 형식 예: 2025-10-29T22:23:00+09:00 또는 2025-10-29T22:23:00Z
+            // 초(second)까지의 길이는 19자 (yyyy-MM-dd'T'HH:mm:ss)
+            if (trimmed.length() > 19 && trimmed.charAt(19) != ' ') {
+                trimmed = trimmed.substring(0, 19);
+            }
+        } catch (Exception e) {
+            // 실패해도 원본을 사용하여 파싱 시도
+        }
+
         SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
         SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy년 M월 d일 h:mm a", Locale.KOREAN);
 
         try {
-            Date date = inputFormat.parse(rawDate);
+            Date date = inputFormat.parse(trimmed);
             if (date == null) {
                 Log.w(TAG, "formatDateString: parsed date is null for rawDate='" + rawDate + "'");
                 return rawDate;

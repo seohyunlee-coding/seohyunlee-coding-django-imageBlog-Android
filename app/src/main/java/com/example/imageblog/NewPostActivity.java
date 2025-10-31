@@ -1,5 +1,6 @@
 package com.example.imageblog;
 
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -38,6 +39,7 @@ public class NewPostActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private Uri imageUri;
     private TextView newPostInfo;
+    private int postId = -1; // 편집 시 사용
 
     private ActivityResultLauncher<String> pickImageLauncher;
 
@@ -52,10 +54,35 @@ public class NewPostActivity extends AppCompatActivity {
         Button btnPick = findViewById(R.id.btnPickImage);
         Button btnSubmit = findViewById(R.id.btnSubmit);
         progressBar = findViewById(R.id.progressBar);
-        newPostInfo = findViewById(R.id.newPostInfo);
+        newPostInfo = (TextView) findViewById(R.id.newPostInfo);
 
-        ImageButton btnClose = findViewById(R.id.newPostClose);
+        ImageButton btnClose = (ImageButton) findViewById(R.id.newPostClose);
         btnClose.setOnClickListener(v -> finish());
+
+        // 인텐트에서 편집용 데이터가 있을 경우 필드 채우기
+        Intent intent = getIntent();
+        if (intent != null) {
+            postId = intent.getIntExtra("id", -1);
+            String title = intent.getStringExtra("title");
+            String text = intent.getStringExtra("text");
+            String image = intent.getStringExtra("image");
+            if (title != null) etTitle.setText(title);
+            if (text != null) etText.setText(text);
+            if (image != null && !image.isEmpty()) {
+                // image가 URL일 경우 Glide로 로드
+                try {
+                    int radiusDp = 12;
+                    int radiusPx = (int) (radiusDp * getResources().getDisplayMetrics().density + 0.5f);
+                    Glide.with(this)
+                            .load(image)
+                            .apply(RequestOptions.bitmapTransform(new RoundedCorners(radiusPx)))
+                            .into(imagePreview);
+                    newPostInfo.setText("기존 이미지");
+                } catch (Exception e) {
+                    Log.w(TAG, "failed to load provided image", e);
+                }
+            }
+        }
 
         pickImageLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
             if (uri != null) {
@@ -80,7 +107,7 @@ public class NewPostActivity extends AppCompatActivity {
         btnSubmit.setOnClickListener(v -> {
             String title = etTitle.getText().toString().trim();
             String text = etText.getText().toString().trim();
-            if (title.isEmpty() && text.isEmpty() && imageUri == null) {
+            if (title.isEmpty() && text.isEmpty() && imageUri == null && postId < 0) {
                 Toast.makeText(this, "제목/본문/이미지 중 하나 이상 입력하세요", Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -113,7 +140,13 @@ public class NewPostActivity extends AppCompatActivity {
 
         new Thread(() -> {
             OkHttpClient client = new OkHttpClient();
-            String url = "https://cwijiq.pythonanywhere.com/api_root/Post/";
+            String url;
+            boolean isEdit = postId >= 0;
+            if (isEdit) {
+                url = "https://cwijiq.pythonanywhere.com/api_root/Post/" + postId + "/";
+            } else {
+                url = "https://cwijiq.pythonanywhere.com/api_root/Post/";
+            }
 
             try {
                 MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
@@ -161,10 +194,14 @@ public class NewPostActivity extends AppCompatActivity {
                 }
 
                 RequestBody requestBody = builder.build();
-                Request request = new Request.Builder()
-                        .url(url)
-                        .post(requestBody)
-                        .build();
+                Request.Builder reqBuilder = new Request.Builder().url(url);
+                if (isEdit) {
+                    reqBuilder.put(requestBody);
+                } else {
+                    reqBuilder.post(requestBody);
+                }
+
+                Request request = reqBuilder.build();
 
                 Response response = client.newCall(request).execute();
                 final boolean success = response.isSuccessful();
@@ -175,10 +212,11 @@ public class NewPostActivity extends AppCompatActivity {
                     progressBar.setVisibility(android.view.View.GONE);
                     btnSubmit.setEnabled(true);
                     if (success) {
-                        Toast.makeText(NewPostActivity.this, "게시 성공", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(NewPostActivity.this, isEdit ? "수정 성공" : "게시 성공", Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
                         finish();
                     } else {
-                        Toast.makeText(NewPostActivity.this, "게시 실패: " + respBody, Toast.LENGTH_LONG).show();
+                        Toast.makeText(NewPostActivity.this, (isEdit ? "수정 실패: " : "게시 실패: ") + respBody, Toast.LENGTH_LONG).show();
                     }
                 });
 

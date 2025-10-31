@@ -36,6 +36,7 @@ import java.util.regex.Pattern;
 
 public class MainActivate extends AppCompatActivity {
     private static final String TAG = "MainActivate";
+    public static final int REQ_VIEW_POST = 1001; // 상세 보기/편집 요청 코드
     TextView textView;
     RecyclerView recyclerView;
     MaterialButton btnLoad;
@@ -152,6 +153,7 @@ public class MainActivate extends AppCompatActivity {
                                     }
                                 }
                                 if (aryJson == null) {
+                                    int id = root.optInt("id", -1);
                                     String author = root.optString("author", "");
                                     String title = root.optString("title", "");
                                     String text = root.optString("text", root.optString("body", ""));
@@ -160,7 +162,7 @@ public class MainActivate extends AppCompatActivity {
                                     if (img.isEmpty()) img = root.optString("image_url", "");
                                     if (img.isEmpty()) img = root.optString("photo", "");
                                     String resolved = img.isEmpty() ? "" : resolveUrl(img);
-                                    Post p = new Post(author, title, text, published, resolved);
+                                    Post p = new Post(id, author, title, text, published, resolved);
                                     postList.add(p);
                                 }
                             }
@@ -174,6 +176,7 @@ public class MainActivate extends AppCompatActivity {
                             if (Thread.currentThread().isInterrupted()) return;
                             try {
                                 JSONObject obj = aryJson.getJSONObject(i);
+                                int id = obj.optInt("id", -1);
                                 String author = obj.optString("author", "");
                                 String title = obj.optString("title", "");
                                 String text = obj.optString("text", obj.optString("body", ""));
@@ -185,7 +188,7 @@ public class MainActivate extends AppCompatActivity {
                                 if (!resolved.isEmpty()) {
                                     seen.add(resolved);
                                 }
-                                Post p = new Post(author, title, text, published, resolved);
+                                Post p = new Post(id, author, title, text, published, resolved);
                                 postList.add(p);
                             } catch (JSONException je) {
                                 Log.w(TAG, "startFetch: 배열 요소 파싱 실패", je);
@@ -199,7 +202,7 @@ public class MainActivate extends AppCompatActivity {
                         if (m.find()) {
                             String found = m.group();
                             if (!seen.contains(found)) {
-                                Post p0 = new Post("", "", "", "", found);
+                                Post p0 = new Post(-1, "", "", "", "", found);
                                 postList.add(p0);
                             }
                         }
@@ -265,6 +268,25 @@ public class MainActivate extends AppCompatActivity {
                 btnLoad.setAlpha(1f);
             }
             Log.d(TAG, "onPostsFetched: RecyclerView에 adapter 적용 완료");
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_VIEW_POST && resultCode == RESULT_OK) {
+            Log.d(TAG, "onActivityResult: refreshing posts after detail activity result");
+            if (fetchThread != null && fetchThread.isAlive()) {
+                fetchThread.interrupt();
+            }
+            // UI 상태: 숨기고 로딩 표시
+            recyclerView.setVisibility(View.GONE);
+            textView.setText("로딩 중...");
+            if (btnLoad != null) {
+                btnLoad.setEnabled(false);
+                btnLoad.setAlpha(0.6f);
+            }
+            startFetch(site_url + "/api/posts");
         }
     }
 }
