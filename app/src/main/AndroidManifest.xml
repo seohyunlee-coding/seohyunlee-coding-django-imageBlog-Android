@@ -25,6 +25,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".PostDetailActivity" android:exported="false" />
+        <activity android:name=".NewPostActivity" android:exported="false" />
 
     </application>
 

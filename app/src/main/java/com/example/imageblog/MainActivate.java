@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.text.Spanned;
+import android.content.Intent;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.text.HtmlCompat;
@@ -92,8 +93,9 @@ public class MainActivate extends AppCompatActivity {
         Toast.makeText(getApplicationContext(), "Download", Toast.LENGTH_LONG).show();
     }
     public void onClickUpload(View v) {
-        //...여기에 코드 추가...
-        Toast.makeText(getApplicationContext(), "Upload", Toast.LENGTH_LONG).show();
+        // NewPostActivity를 열어 사용자가 이미지/제목/본문을 입력하고 업로드하도록 함
+        Intent intent = new Intent(this, NewPostActivity.class);
+        startActivity(intent);
     }
 
     // startFetch: 백그라운드 스레드에서 API 호출 및 파싱 수행
