@@ -11,7 +11,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHolder> {
     private final List<Post> posts;
@@ -30,11 +34,21 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
     @Override
     public void onBindViewHolder(@NonNull ImageViewHolder holder, int position) {
         Post post = posts.get(position);
-        holder.textAuthor.setText(post.getAuthor() == null || post.getAuthor().isEmpty() ? "Unknown" : post.getAuthor());
+
+        // 제목과 내용
         holder.textTitle.setText(post.getTitle() == null ? "" : post.getTitle());
         holder.textBody.setText(post.getText() == null ? "" : post.getText());
-        holder.textDate.setText(post.getPublishedDate() == null ? "" : post.getPublishedDate());
 
+        // ✅ 발행 시간 한국어 형식으로 표시
+        String rawDate = post.getPublishedDate(); // 예: "2025-10-09T21:31:00"
+        if (rawDate != null && !rawDate.isEmpty()) {
+            String formattedDate = formatDateString(rawDate);
+            holder.textDate.setText(formattedDate);
+        } else {
+            holder.textDate.setText("");
+        }
+
+        // 이미지 표시
         String url = post.getImageUrl();
         if (url != null && !url.isEmpty()) {
             Glide.with(holder.imageViewItem.getContext())
@@ -42,7 +56,6 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
                     .centerCrop()
                     .into(holder.imageViewItem);
         } else {
-            // 이미지가 없으면 뷰를 비우거나 기본 이미지 설정
             holder.imageViewItem.setImageDrawable(null);
         }
     }
@@ -52,9 +65,22 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
         return posts == null ? 0 : posts.size();
     }
 
-    static class ImageViewHolder extends RecyclerView.ViewHolder {
+    // 날짜 문자열을 "2025년 10월 9일 9:31 오후" 형식으로 변환
+    private String formatDateString(String rawDate) {
+        SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy년 M월 d일 h:mm a", Locale.KOREAN);
+
+        try {
+            Date date = inputFormat.parse(rawDate);
+            return outputFormat.format(date); // 예: "2025년 10월 9일 9:31 오후"
+        } catch (ParseException e) {
+            e.printStackTrace();
+            return rawDate; // 파싱 실패 시 원본 문자열 표시
+        }
+    }
+
+    public static class ImageViewHolder extends RecyclerView.ViewHolder {
         ImageView imageViewItem;
-        TextView textAuthor;
         TextView textTitle;
         TextView textDate;
         TextView textBody;
@@ -62,7 +88,6 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
         public ImageViewHolder(View itemView) {
             super(itemView);
             imageViewItem = itemView.findViewById(R.id.imageViewItem);
-            textAuthor = itemView.findViewById(R.id.textAuthor);
             textTitle = itemView.findViewById(R.id.textTitle);
             textDate = itemView.findViewById(R.id.textDate);
             textBody = itemView.findViewById(R.id.textBody);
