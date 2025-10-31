@@ -5,8 +5,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -17,6 +19,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
+import com.bumptech.glide.request.RequestOptions;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -31,6 +37,7 @@ public class NewPostActivity extends AppCompatActivity {
     private EditText etTitle, etText;
     private ProgressBar progressBar;
     private Uri imageUri;
+    private TextView newPostInfo;
 
     private ActivityResultLauncher<String> pickImageLauncher;
 
@@ -45,11 +52,26 @@ public class NewPostActivity extends AppCompatActivity {
         Button btnPick = findViewById(R.id.btnPickImage);
         Button btnSubmit = findViewById(R.id.btnSubmit);
         progressBar = findViewById(R.id.progressBar);
+        newPostInfo = findViewById(R.id.newPostInfo);
+
+        ImageButton btnClose = findViewById(R.id.newPostClose);
+        btnClose.setOnClickListener(v -> finish());
 
         pickImageLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
             if (uri != null) {
                 imageUri = uri;
-                imagePreview.setImageURI(uri);
+                // Glide로 이미지 로드하고 둥근 모서리 적용
+                int radiusDp = 12;
+                int radiusPx = (int) (radiusDp * getResources().getDisplayMetrics().density + 0.5f);
+                Glide.with(this)
+                        .load(uri)
+                        .apply(RequestOptions.bitmapTransform(new RoundedCorners(radiusPx)))
+                        .into(imagePreview);
+
+                // 파일 이름 표시
+                String name = getDisplayName(uri);
+                if (name != null) newPostInfo.setText(name);
+                else newPostInfo.setText("");
             }
         });
 
@@ -64,6 +86,25 @@ public class NewPostActivity extends AppCompatActivity {
             }
             uploadPost(title, text, imageUri, btnSubmit);
         });
+    }
+
+    private String getDisplayName(Uri uri) {
+        String displayName = null;
+        android.database.Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(uri, null, null, null, null);
+            if (cursor != null) {
+                int idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (idx != -1 && cursor.moveToFirst()) {
+                    displayName = cursor.getString(idx);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getDisplayName failed", e);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return displayName;
     }
 
     private void uploadPost(String title, String text, Uri imageUri, Button btnSubmit) {
