@@ -1,5 +1,6 @@
 package com.example.imageblog;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,6 +20,7 @@ import java.util.Locale;
 
 public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHolder> {
     private final List<Post> posts;
+    private static final String TAG = "ImageAdapter";
 
     public ImageAdapter(List<Post> posts) {
         this.posts = posts;
@@ -58,6 +60,17 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
         } else {
             holder.imageViewItem.setImageDrawable(null);
         }
+
+        // 아이템 클릭 시 상세 화면으로 이동
+        holder.itemView.setOnClickListener(v -> {
+            android.content.Context ctx = v.getContext();
+            android.content.Intent intent = new android.content.Intent(ctx, PostDetailActivity.class);
+            intent.putExtra("title", post.getTitle() == null ? "" : post.getTitle());
+            intent.putExtra("text", post.getText() == null ? "" : post.getText());
+            intent.putExtra("published", post.getPublishedDate() == null ? "" : post.getPublishedDate());
+            intent.putExtra("image", post.getImageUrl() == null ? "" : post.getImageUrl());
+            ctx.startActivity(intent);
+        });
     }
 
     @Override
@@ -72,9 +85,13 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ImageViewHol
 
         try {
             Date date = inputFormat.parse(rawDate);
+            if (date == null) {
+                Log.w(TAG, "formatDateString: parsed date is null for rawDate='" + rawDate + "'");
+                return rawDate;
+            }
             return outputFormat.format(date); // 예: "2025년 10월 9일 9:31 오후"
         } catch (ParseException e) {
-            e.printStackTrace();
+            Log.w(TAG, "formatDateString: failed to parse date='" + rawDate + "'", e);
             return rawDate; // 파싱 실패 시 원본 문자열 표시
         }
     }
