@@ -1,6 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">image blog</string>
     <string name="btn_sync">동기화</string>
     <string name="btn_new_post">이미지 게시</string>
     <string name="placeholder_text">…</string>
+    <string name="toolbar_title">image\nblog</string>
 </resources>

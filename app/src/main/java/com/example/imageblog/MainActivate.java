@@ -5,12 +5,15 @@ import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.text.Spanned;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.text.HtmlCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.button.MaterialButton;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -30,12 +33,12 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import android.text.Html;
-
 public class MainActivate extends AppCompatActivity {
     private static final String TAG = "MainActivate";
     TextView textView;
     RecyclerView recyclerView;
+    MaterialButton btnLoad;
+    MaterialButton btnSave;
     String site_url = "https://cwijiq.pythonanywhere.com"; // 변경된 API 호스트
     Thread fetchThread;
     String lastRawJson = null; // 디버깅용으로 원시 JSON을 저장
@@ -59,13 +62,16 @@ public class MainActivate extends AppCompatActivity {
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        textView.setText("초기 로딩 중...");
-        Log.d(TAG, "onCreate: 시작, 자동으로 데이터 로드 시도합니다.");
-        // 자동으로 데이터 로드 시도
-        if (fetchThread != null && fetchThread.isAlive()) {
-            fetchThread.interrupt();
-        }
-        startFetch(site_url + "/api/posts");
+        // 버튼 참조 (XML의 onClick은 그대로 사용)
+        btnLoad = findViewById(R.id.btn_load);
+        btnSave = findViewById(R.id.btn_save);
+
+        // ...changed: 초기에는 게시글을 즉시 불러오지 않고, RecyclerView를 숨깁니다...
+        recyclerView.setVisibility(View.GONE);
+        textView.setText("동기화 버튼을 눌러 게시글을 불러오세요.");
+
+        Log.d(TAG, "onCreate: 초기 상태, 자동 로드 없이 대기합니다.");
+        // 자동 로드 제거: startFetch 호출 없음
     }
 
     public void onClickDownload(View v) {
@@ -74,7 +80,14 @@ public class MainActivate extends AppCompatActivity {
         if (fetchThread != null && fetchThread.isAlive()) {
             fetchThread.interrupt();
         }
+        // 로딩 시작 시 기존 목록 숨기고 상태 표시
+        recyclerView.setVisibility(View.GONE);
         textView.setText("로딩 중...");
+        // 중복 요청 방지: 버튼 비활성화
+        if (btnLoad != null) {
+            btnLoad.setEnabled(false);
+            btnLoad.setAlpha(0.6f);
+        }
         startFetch(site_url + "/api/posts"); // 사용자 제공 엔드포인트 사용
         Toast.makeText(getApplicationContext(), "Download", Toast.LENGTH_LONG).show();
     }
@@ -167,7 +180,7 @@ public class MainActivate extends AppCompatActivity {
                                 if (img.isEmpty()) img = obj.optString("image_url", "");
                                 if (img.isEmpty()) img = obj.optString("photo", "");
                                 String resolved = img.isEmpty() ? "" : resolveUrl(img);
-                                if (!resolved.isEmpty() && !seen.contains(resolved)) {
+                                if (!resolved.isEmpty()) {
                                     seen.add(resolved);
                                 }
                                 Post p = new Post(author, title, text, published, resolved);
@@ -227,16 +240,28 @@ public class MainActivate extends AppCompatActivity {
                 int max = Math.min(1000, lastRawJson.length());
                 display += "\nrawJson: " + lastRawJson.substring(0, max);
             }
+            // 게시글이 없을 땐 리스트 숨김, 안내 문구 표시
+            recyclerView.setVisibility(View.GONE);
             textView.setText(display);
+            // 동기화 완료/실패 후 버튼 다시 활성화
+            if (btnLoad != null) {
+                btnLoad.setEnabled(true);
+                btnLoad.setAlpha(1f);
+            }
             Log.d(TAG, "onPostsFetched: 게시글 없음, rawJson shown");
         } else {
-            // Show '동기화의 인포: X개' with the count highlighted in dark gray
-            String coloredCount = "<b><font color='@color/purple_500'>" + posts.size() + "개</font></b>";
-            // Html doesn't resolve @color, so use hex from colors.xml (purple_500 = #FF6200EE)
-            String html = "이미지 로드 성공!&nbsp;&nbsp;&nbsp; 총 글 개수: <b><font color='#FF424242'>" + posts.size() + "개</font></b>";
-            textView.setText(Html.fromHtml(html), TextView.BufferType.SPANNABLE);
+            String html = "이미지 로드 성공! &nbsp;&nbsp;&nbsp; 총 글 개수: <b><font color='#FF424242'>" + posts.size() + "개</font></b>";
+            Spanned sp = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_LEGACY);
+            textView.setText(sp, TextView.BufferType.SPANNABLE);
+            // 게시글이 있을 땐 리스트 보이고 어댑터 적용
+            recyclerView.setVisibility(View.VISIBLE);
             ImageAdapter adapter = new ImageAdapter(posts);
             recyclerView.setAdapter(adapter);
+            // 동기화 완료 후 버튼 다시 활성화
+            if (btnLoad != null) {
+                btnLoad.setEnabled(true);
+                btnLoad.setAlpha(1f);
+            }
             Log.d(TAG, "onPostsFetched: RecyclerView에 adapter 적용 완료");
         }
     }
