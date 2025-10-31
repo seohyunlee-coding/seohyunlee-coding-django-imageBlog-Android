@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Objects;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
@@ -54,9 +55,9 @@ public class NewPostActivity extends AppCompatActivity {
         Button btnPick = findViewById(R.id.btnPickImage);
         Button btnSubmit = findViewById(R.id.btnSubmit);
         progressBar = findViewById(R.id.progressBar);
-        newPostInfo = (TextView) findViewById(R.id.newPostInfo);
+        newPostInfo = findViewById(R.id.newPostInfo);
 
-        ImageButton btnClose = (ImageButton) findViewById(R.id.newPostClose);
+        ImageButton btnClose = findViewById(R.id.newPostClose);
         btnClose.setOnClickListener(v -> finish());
 
         // 인텐트에서 편집용 데이터가 있을 경우 필드 채우기
@@ -97,8 +98,7 @@ public class NewPostActivity extends AppCompatActivity {
 
                 // 파일 이름 표시
                 String name = getDisplayName(uri);
-                if (name != null) newPostInfo.setText(name);
-                else newPostInfo.setText("");
+                newPostInfo.setText(Objects.requireNonNullElse(name, ""));
             }
         });
 
@@ -117,9 +117,7 @@ public class NewPostActivity extends AppCompatActivity {
 
     private String getDisplayName(Uri uri) {
         String displayName = null;
-        android.database.Cursor cursor = null;
-        try {
-            cursor = getContentResolver().query(uri, null, null, null, null);
+        try (android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
             if (cursor != null) {
                 int idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
                 if (idx != -1 && cursor.moveToFirst()) {
@@ -128,8 +126,6 @@ public class NewPostActivity extends AppCompatActivity {
             }
         } catch (Exception e) {
             Log.w(TAG, "getDisplayName failed", e);
-        } finally {
-            if (cursor != null) cursor.close();
         }
         return displayName;
     }
@@ -140,85 +136,123 @@ public class NewPostActivity extends AppCompatActivity {
 
         new Thread(() -> {
             OkHttpClient client = new OkHttpClient();
-            String url;
             boolean isEdit = postId >= 0;
+            String url;
             if (isEdit) {
+                // Use cwijiq host for PATCH as requested
                 url = "https://cwijiq.pythonanywhere.com/api_root/Post/" + postId + "/";
             } else {
                 url = "https://cwijiq.pythonanywhere.com/api_root/Post/";
             }
 
             try {
-                MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
-                        .addFormDataPart("author", "1")
-                        .addFormDataPart("title", title)
-                        .addFormDataPart("text", text);
-
-                if (imageUri != null) {
-                    InputStream is = null;
-                    try {
-                        is = getContentResolver().openInputStream(imageUri);
-                        if (is != null) {
-                            byte[] data = toByteArray(is);
-
-                            String mime = getContentResolver().getType(imageUri);
-                            if (mime == null) mime = "application/octet-stream";
-                            MediaType mediaType = MediaType.parse(mime);
-
-                            String filename = "upload_image";
-                            android.database.Cursor cursor = null;
-                            try {
-                                cursor = getContentResolver().query(imageUri, null, null, null, null);
-                                if (cursor != null) {
-                                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
-                                    if (nameIndex != -1 && cursor.moveToFirst()) {
-                                        filename = cursor.getString(nameIndex);
-                                    }
-                                }
-                            } catch (Exception e) {
-                                Log.w(TAG, "filename lookup failed", e);
-                            } finally {
-                                if (cursor != null) cursor.close();
-                            }
-
-                            RequestBody fileBody = RequestBody.create(data, mediaType);
-                            builder.addFormDataPart("image", filename, fileBody);
-                        } else {
-                            Log.w(TAG, "InputStream is null for imageUri");
-                        }
-                    } finally {
-                        if (is != null) {
-                            try { is.close(); } catch (IOException ignored) {}
-                        }
-                    }
-                }
-
-                RequestBody requestBody = builder.build();
-                Request.Builder reqBuilder = new Request.Builder().url(url);
                 if (isEdit) {
-                    reqBuilder.put(requestBody);
-                } else {
-                    reqBuilder.post(requestBody);
-                }
-
-                Request request = reqBuilder.build();
-
-                Response response = client.newCall(request).execute();
-                final boolean success = response.isSuccessful();
-                final String respBody = response.body() != null ? response.body().string() : "";
-                response.close();
-
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(android.view.View.GONE);
-                    btnSubmit.setEnabled(true);
-                    if (success) {
-                        Toast.makeText(NewPostActivity.this, isEdit ? "수정 성공" : "게시 성공", Toast.LENGTH_SHORT).show();
-                        setResult(RESULT_OK);
-                        finish();
-                    } else {
-                        Toast.makeText(NewPostActivity.this, (isEdit ? "수정 실패: " : "게시 실패: ") + respBody, Toast.LENGTH_LONG).show();
+                    // Build JSON with only non-empty fields
+                    org.json.JSONObject json = new org.json.JSONObject();
+                    try {
+                        if (title != null && !title.isEmpty()) json.put("title", title);
+                        if (text != null && !text.isEmpty()) json.put("text", text);
+                    } catch (org.json.JSONException je) {
+                        Log.w(TAG, "failed to build json for patch", je);
                     }
-                });
+
+                    if (json.length() == 0) {
+                        // nothing to update
+                        runOnUiThread(() -> {
+                            progressBar.setVisibility(android.view.View.GONE);
+                            btnSubmit.setEnabled(true);
+                            Toast.makeText(NewPostActivity.this, "수정할 내용이 없습니다.", Toast.LENGTH_SHORT).show();
+                        });
+                        return;
+                    }
+
+                    // If an image was selected during edit, inform user that PATCH does not update image here
+                    if (imageUri != null) {
+                        runOnUiThread(() -> Toast.makeText(NewPostActivity.this, "편집 시 이미지 변경은 현재 지원되지 않습니다. 이미지 변경을 원하면 새로 업로드하세요.", Toast.LENGTH_LONG).show());
+                    }
+
+                    String jsonStr = json.toString();
+                    RequestBody requestBody = RequestBody.create(jsonStr, okhttp3.MediaType.parse("application/json; charset=utf-8"));
+                    Request request = new Request.Builder()
+                            .url(url)
+                            .patch(requestBody)
+                            .build();
+
+                    Response response = client.newCall(request).execute();
+                    final boolean success = response.isSuccessful();
+                    final String respBody = response.body() != null ? response.body().string() : "";
+                    response.close();
+
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(android.view.View.GONE);
+                        btnSubmit.setEnabled(true);
+                        if (success) {
+                            Toast.makeText(NewPostActivity.this, "수정 성공", Toast.LENGTH_SHORT).show();
+                            setResult(RESULT_OK);
+                            finish();
+                        } else {
+                            Toast.makeText(NewPostActivity.this, "수정 실패: " + respBody, Toast.LENGTH_LONG).show();
+                        }
+                    });
+
+                } else {
+                    MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
+                            .addFormDataPart("author", "1")
+                            .addFormDataPart("title", title)
+                            .addFormDataPart("text", text);
+
+                    if (imageUri != null) {
+                        try (InputStream is = getContentResolver().openInputStream(imageUri)) {
+                            if (is != null) {
+                                byte[] data = toByteArray(is);
+
+                                String mime = getContentResolver().getType(imageUri);
+                                if (mime == null) mime = "application/octet-stream";
+                                MediaType mediaType = MediaType.parse(mime);
+
+                                String filename = "upload_image";
+                                try (android.database.Cursor cursor = getContentResolver().query(imageUri, null, null, null, null)) {
+                                    if (cursor != null) {
+                                        int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                                        if (nameIndex != -1 && cursor.moveToFirst()) {
+                                            filename = cursor.getString(nameIndex);
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    Log.w(TAG, "filename lookup failed", e);
+                                }
+
+                                RequestBody fileBody = RequestBody.create(data, mediaType);
+                                builder.addFormDataPart("image", filename, fileBody);
+                            } else {
+                                Log.w(TAG, "InputStream is null for imageUri");
+                            }
+                        }
+                    }
+
+                    RequestBody requestBody = builder.build();
+                    Request.Builder reqBuilder = new Request.Builder().url(url);
+                    reqBuilder.post(requestBody);
+
+                    Request request = reqBuilder.build();
+
+                    Response response = client.newCall(request).execute();
+                    final boolean success = response.isSuccessful();
+                    final String respBody = response.body() != null ? response.body().string() : "";
+                    response.close();
+
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(android.view.View.GONE);
+                        btnSubmit.setEnabled(true);
+                        if (success) {
+                            Toast.makeText(NewPostActivity.this, "게시 성공", Toast.LENGTH_SHORT).show();
+                            setResult(RESULT_OK);
+                            finish();
+                        } else {
+                            Toast.makeText(NewPostActivity.this, "게시 실패: " + respBody, Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
 
             } catch (IOException e) {
                 Log.e(TAG, "upload failed", e);
