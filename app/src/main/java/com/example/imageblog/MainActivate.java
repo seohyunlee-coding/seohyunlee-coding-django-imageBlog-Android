@@ -24,12 +24,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -37,6 +32,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 public class MainActivate extends AppCompatActivity {
     private static final String TAG = "MainActivate";
@@ -114,7 +113,8 @@ public class MainActivate extends AppCompatActivity {
     public void onClickUpload(View v) {
         // NewPostActivity를 열어 사용자가 이미지/제목/본문을 입력하고 업로드하도록 함
         Intent intent = new Intent(this, NewPostActivity.class);
-        startActivity(intent);
+        // startActivityForResult로 열어 업로드 성공 시 리프레시를 받도록 함
+        startActivityForResult(intent, REQ_VIEW_POST);
     }
 
     // startFetch: 백그라운드 스레드에서 API 호출 및 파싱 수행
@@ -122,45 +122,44 @@ public class MainActivate extends AppCompatActivity {
         fetchThread = new Thread(() -> {
             List<Post> postList = new ArrayList<>();
             Set<String> seen = new HashSet<>();
-            HttpURLConnection conn = null;
-            try {
-                Log.d(TAG, "startFetch: 호출 URL=" + apiUrl);
-                URL urlAPI = new URL(apiUrl);
-                conn = (HttpURLConnection) urlAPI.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
-                int responseCode = conn.getResponseCode();
+
+            OkHttpClient client = NetworkClient.getClient(MainActivate.this);
+            Request req = new Request.Builder().url(apiUrl).get().build();
+
+            try (Response resp = client.newCall(req).execute()) {
+                int responseCode = resp.code();
                 Log.d(TAG, "startFetch: responseCode=" + responseCode);
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    InputStream is = conn.getInputStream();
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-                    StringBuilder result = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        result.append(line);
-                        if (Thread.currentThread().isInterrupted()) {
-                            // 중단 신호
-                            reader.close();
-                            return;
-                        }
-                    }
-                    is.close();
-                    String strJson = result.toString();
-                    lastRawJson = strJson; // 저장
+
+                if (responseCode == 200) {
+                    String strJson = resp.body() != null ? resp.body().string() : "";
+                    lastRawJson = strJson;
                     Log.d(TAG, "startFetch: raw json=" + strJson);
 
                     JSONArray aryJson = null;
                     try {
                         aryJson = new JSONArray(strJson);
                     } catch (JSONException ex) {
+                        // not an array; try object forms
                         try {
                             JSONObject root = new JSONObject(strJson);
                             if (root.has("results") && root.opt("results") instanceof JSONArray) {
                                 aryJson = root.getJSONArray("results");
                             } else if (root.has("data") && root.opt("data") instanceof JSONArray) {
                                 aryJson = root.getJSONArray("data");
+                            } else if (root.has("id")) {
+                                // single object -> create one Post
+                                int id = root.optInt("id", -1);
+                                String author = root.optString("author", "");
+                                String title = root.optString("title", "");
+                                String text = root.optString("text", root.optString("body", ""));
+                                String published = root.optString("published_date", root.optString("published", ""));
+                                String img = root.optString("image", "");
+                                if (img.isEmpty()) img = root.optString("image_url", "");
+                                if (img.isEmpty()) img = root.optString("photo", "");
+                                String resolved = img.isEmpty() ? "" : resolveUrl(img);
+                                postList.add(new Post(id, author, title, text, published, resolved));
                             } else {
+                                // try to find any array inside object
                                 Iterator<String> keys = root.keys();
                                 while (keys.hasNext()) {
                                     String k = keys.next();
@@ -170,22 +169,9 @@ public class MainActivate extends AppCompatActivity {
                                         break;
                                     }
                                 }
-                                if (aryJson == null) {
-                                    int id = root.optInt("id", -1);
-                                    String author = root.optString("author", "");
-                                    String title = root.optString("title", "");
-                                    String text = root.optString("text", root.optString("body", ""));
-                                    String published = root.optString("published_date", root.optString("published", ""));
-                                    String img = root.optString("image", "");
-                                    if (img.isEmpty()) img = root.optString("image_url", "");
-                                    if (img.isEmpty()) img = root.optString("photo", "");
-                                    String resolved = img.isEmpty() ? "" : resolveUrl(img);
-                                    Post p = new Post(id, author, title, text, published, resolved);
-                                    postList.add(p);
-                                }
                             }
-                        } catch (JSONException e) {
-                            Log.w(TAG, "startFetch: JSON 파싱 실패", e);
+                        } catch (JSONException je) {
+                            Log.w(TAG, "startFetch: JSON 파싱 실패", je);
                         }
                     }
 
@@ -203,17 +189,15 @@ public class MainActivate extends AppCompatActivity {
                                 if (img.isEmpty()) img = obj.optString("image_url", "");
                                 if (img.isEmpty()) img = obj.optString("photo", "");
                                 String resolved = img.isEmpty() ? "" : resolveUrl(img);
-                                if (!resolved.isEmpty()) {
-                                    seen.add(resolved);
-                                }
-                                Post p = new Post(id, author, title, text, published, resolved);
-                                postList.add(p);
+                                if (!resolved.isEmpty()) seen.add(resolved);
+                                postList.add(new Post(id, author, title, text, published, resolved));
                             } catch (JSONException je) {
                                 Log.w(TAG, "startFetch: 배열 요소 파싱 실패", je);
                             }
                         }
                     }
 
+                    // fallback: try to extract an image URL from raw JSON if nothing parsed
                     if (postList.isEmpty() && lastRawJson != null) {
                         Pattern p = Pattern.compile("https?://[^\"'\\s,<>]+", Pattern.CASE_INSENSITIVE);
                         Matcher m = p.matcher(lastRawJson);
@@ -231,8 +215,6 @@ public class MainActivate extends AppCompatActivity {
                 }
             } catch (IOException e) {
                 Log.e(TAG, "startFetch: 예외 발생", e);
-            } finally {
-                if (conn != null) conn.disconnect();
             }
 
             // UI 업데이트
@@ -316,6 +298,26 @@ public class MainActivate extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 토큰이 서버에서 무효화되었다고 표시된 경우 사용자에게 알림
+        try {
+            if (AuthHelper.isTokenInvalid(this)) {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("인증 오류")
+                        .setMessage("토큰이 만료되었거나 유효하지 않습니다. 다시 시도하려면 확인을 누르세요.")
+                        .setPositiveButton("확인", (d, w) -> {
+                            AuthHelper.clearTokenInvalid(this);
+                        })
+                        .setCancelable(false)
+                        .show();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "onResume: token invalid check failed", e);
+        }
+    }
+
     // 검색 실행: etSearch의 텍스트로 search API 호출
     private void performSearch() {
         String q = etSearch == null ? "" : etSearch.getText().toString().trim();
@@ -324,7 +326,7 @@ public class MainActivate extends AppCompatActivity {
             return;
         }
         try {
-            String enc = java.net.URLEncoder.encode(q, "UTF-8");
+            String enc = java.net.URLEncoder.encode(q, java.nio.charset.StandardCharsets.UTF_8.name());
             String searchUrl = site_url + "/api/posts/search/?q=" + enc;
             Log.d(TAG, "performSearch: url=" + searchUrl);
             if (fetchThread != null && fetchThread.isAlive()) {

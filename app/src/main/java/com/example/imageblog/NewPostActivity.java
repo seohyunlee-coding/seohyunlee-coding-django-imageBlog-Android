@@ -135,7 +135,7 @@ public class NewPostActivity extends AppCompatActivity {
         btnSubmit.setEnabled(false);
 
         new Thread(() -> {
-            OkHttpClient client = new OkHttpClient();
+            OkHttpClient client = NetworkClient.getClient(NewPostActivity.this);
             boolean isEdit = postId >= 0;
             String url;
             if (isEdit) {
@@ -146,6 +146,8 @@ public class NewPostActivity extends AppCompatActivity {
             }
 
             try {
+                String token = AuthHelper.getToken(NewPostActivity.this);
+
                 if (isEdit) {
                     // Build JSON with only non-empty fields
                     org.json.JSONObject json = new org.json.JSONObject();
@@ -173,10 +175,13 @@ public class NewPostActivity extends AppCompatActivity {
 
                     String jsonStr = json.toString();
                     RequestBody requestBody = RequestBody.create(jsonStr, okhttp3.MediaType.parse("application/json; charset=utf-8"));
-                    Request request = new Request.Builder()
+                    Request.Builder reqBuilder = new Request.Builder()
                             .url(url)
-                            .patch(requestBody)
-                            .build();
+                            .patch(requestBody);
+                    if (token != null) {
+                        reqBuilder.header("Authorization", "Token " + token);
+                    }
+                    Request request = reqBuilder.build();
 
                     Response response = client.newCall(request).execute();
                     final boolean success = response.isSuccessful();
@@ -233,6 +238,9 @@ public class NewPostActivity extends AppCompatActivity {
                     RequestBody requestBody = builder.build();
                     Request.Builder reqBuilder = new Request.Builder().url(url);
                     reqBuilder.post(requestBody);
+                    if (token != null) {
+                        reqBuilder.header("Authorization", "Token " + token);
+                    }
 
                     Request request = reqBuilder.build();
 
@@ -274,5 +282,22 @@ public class NewPostActivity extends AppCompatActivity {
         }
         buffer.flush();
         return buffer.toByteArray();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            if (AuthHelper.isTokenInvalid(this)) {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("인증 오류")
+                        .setMessage("토큰이 만료되었습니다.")
+                        .setPositiveButton("확인", (d, w) -> AuthHelper.clearTokenInvalid(this))
+                        .setCancelable(false)
+                        .show();
+            }
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "onResume: token invalid check failed", e);
+        }
     }
 }

@@ -124,6 +124,23 @@ public class PostDetailActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            if (AuthHelper.isTokenInvalid(this)) {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("인증 오류")
+                        .setMessage("토큰이 만료되었습니다.")
+                        .setPositiveButton("확인", (d, w) -> AuthHelper.clearTokenInvalid(this))
+                        .setCancelable(false)
+                        .show();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "onResume: token invalid check failed", e);
+        }
+    }
+
     private void performDeletePost(int id) {
         if (id < 0) {
             Toast.makeText(this, "유효하지 않은 게시글입니다.", Toast.LENGTH_SHORT).show();
@@ -133,36 +150,33 @@ public class PostDetailActivity extends AppCompatActivity {
         Toast.makeText(this, "삭제 요청중...", Toast.LENGTH_SHORT).show();
 
         new Thread(() -> {
-            java.net.HttpURLConnection conn = null;
             try {
-                java.net.URL url = new java.net.URL(deleteUrl);
-                conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("DELETE");
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
-                conn.setDoInput(true);
-
-                int code = conn.getResponseCode();
+                okhttp3.OkHttpClient client = NetworkClient.getClient(PostDetailActivity.this);
+                okhttp3.Request req = new okhttp3.Request.Builder()
+                        .url(deleteUrl)
+                        .delete()
+                        .build();
+                okhttp3.Response resp = client.newCall(req).execute();
+                int code = resp.code();
                 Log.d(TAG, "DELETE response code=" + code);
+                String body = resp.body() != null ? resp.body().string() : null;
+                resp.close();
 
                 runOnUiThread(() -> {
-                    if (code == java.net.HttpURLConnection.HTTP_NO_CONTENT || code == java.net.HttpURLConnection.HTTP_OK) {
+                    if (code == 204 || code == 200) {
                         Toast.makeText(PostDetailActivity.this, "삭제되었습니다.", Toast.LENGTH_SHORT).show();
                         setResult(RESULT_OK);
                         finish();
                     } else {
-                        String msg = "삭제 실패: HTTP " + code;
+                        String msg = "삭제 실패: HTTP " + code + (body != null && !body.isEmpty() ? (" - " + body) : "");
                         Toast.makeText(PostDetailActivity.this, msg, Toast.LENGTH_LONG).show();
                     }
                 });
-
             } catch (Exception e) {
                 Log.e(TAG, "performDeletePost failed", e);
                 runOnUiThread(() -> Toast.makeText(PostDetailActivity.this, "삭제 중 오류가 발생했습니다: " + e.getMessage(), Toast.LENGTH_LONG).show());
-            } finally {
-                if (conn != null) conn.disconnect();
             }
-        }).start();
+         }).start();
     }
 
     // 날짜 문자열을 "2025년 10월 9일 9:31 오전" 형식으로 변환
