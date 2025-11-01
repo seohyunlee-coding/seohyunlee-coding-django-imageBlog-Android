@@ -69,6 +69,15 @@ public class MainActivate extends AppCompatActivity {
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
+        // 백그라운드에서 토큰을 미리 가져와서 첫 요청 시 인터셉터가 블로킹하는 시간을 줄입니다.
+        new Thread(() -> {
+            try {
+                AuthHelper.getToken(MainActivate.this);
+            } catch (Exception e) {
+                Log.d(TAG, "pre-warm token failed", e);
+            }
+        }).start();
+
         // 버튼 참조 (XML의 onClick은 그대로 사용)
         btnLoad = findViewById(R.id.btn_load);
         btnSave = findViewById(R.id.btn_save);
@@ -119,9 +128,14 @@ public class MainActivate extends AppCompatActivity {
 
     // startFetch: 백그라운드 스레드에서 API 호출 및 파싱 수행
     private void startFetch(final String apiUrl) {
+        // 이전에 저장된 rawJson을 초기화해서 UI에 이전 결과가 표시되는 것을 방지
+        lastRawJson = null;
         fetchThread = new Thread(() -> {
             List<Post> postList = new ArrayList<>();
             Set<String> seen = new HashSet<>();
+
+            // 안전: 스레드 시작 시에도 lastRawJson이 비어있도록 초기화
+            lastRawJson = null;
 
             OkHttpClient client = NetworkClient.getClient(MainActivate.this);
             Request req = new Request.Builder().url(apiUrl).get().build();
@@ -240,24 +254,23 @@ public class MainActivate extends AppCompatActivity {
     private void onPostsFetched(List<Post> posts) {
         Log.d(TAG, "onPostsFetched: posts size=" + (posts == null ? 0 : posts.size()));
         if (posts == null || posts.isEmpty()) {
-            String display = "불러올 게시글이 없습니다.";
-            if (lastRawJson != null && !lastRawJson.isEmpty()) {
-                int max = Math.min(1000, lastRawJson.length());
-                display += "\nrawJson: " + lastRawJson.substring(0, max);
-            }
-            // 게시글이 없을 땐 리스트 숨김, 안내 문구 표시
+            // 게시글이 없을 땐 리스트 숨김, 사용자에게 메시지를 표시하지 않음(빈 상태 유지)
             recyclerView.setVisibility(View.GONE);
-            textView.setText(display);
-            // 동기화 완료/실패 후 버튼 다시 활성화
-            if (btnLoad != null) {
-                btnLoad.setEnabled(true);
-                btnLoad.setAlpha(1f);
+            textView.setText("");
+            // 디버그용으로 rawJson은 로그에 남김
+            if (lastRawJson != null && !lastRawJson.isEmpty()) {
+                Log.d(TAG, "rawJson when empty: " + (lastRawJson.length() > 1000 ? lastRawJson.substring(0, 1000) + "..." : lastRawJson));
             }
-            if (btnSearch != null) {
-                btnSearch.setEnabled(true);
-                btnSearch.setAlpha(1f);
-            }
-            Log.d(TAG, "onPostsFetched: 게시글 없음, rawJson shown");
+             // 동기화 완료/실패 후 버튼 다시 활성화
+             if (btnLoad != null) {
+                 btnLoad.setEnabled(true);
+                 btnLoad.setAlpha(1f);
+             }
+             if (btnSearch != null) {
+                 btnSearch.setEnabled(true);
+                 btnSearch.setAlpha(1f);
+             }
+            Log.d(TAG, "onPostsFetched: 게시글 없음");
         } else {
             String html = "이미지 로드 성공! &nbsp;&nbsp;&nbsp; 총 글 개수: <b><font color='#FF424242'>" + posts.size() + "개</font></b>";
             Spanned sp = HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_LEGACY);
