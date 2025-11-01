@@ -178,27 +178,24 @@ public class NewPostActivity extends AppCompatActivity {
                     Request.Builder reqBuilder = new Request.Builder()
                             .url(url)
                             .patch(requestBody);
-                    if (token != null) {
-                        reqBuilder.header("Authorization", "Token " + token);
-                    }
-                    Request request = reqBuilder.build();
+                     Request request = reqBuilder.build();
 
-                    Response response = client.newCall(request).execute();
-                    final boolean success = response.isSuccessful();
-                    final String respBody = response.body() != null ? response.body().string() : "";
-                    response.close();
+                     Response response = client.newCall(request).execute();
+                     final boolean success = response.isSuccessful();
+                     final String respBody = response.body() != null ? response.body().string() : "";
+                     response.close();
 
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(android.view.View.GONE);
-                        btnSubmit.setEnabled(true);
-                        if (success) {
-                            Toast.makeText(NewPostActivity.this, "수정 성공", Toast.LENGTH_SHORT).show();
-                            setResult(RESULT_OK);
-                            finish();
-                        } else {
-                            Toast.makeText(NewPostActivity.this, "수정 실패: " + respBody, Toast.LENGTH_LONG).show();
-                        }
-                    });
+                     runOnUiThread(() -> {
+                         progressBar.setVisibility(android.view.View.GONE);
+                         btnSubmit.setEnabled(true);
+                         if (success) {
+                             Toast.makeText(NewPostActivity.this, "수정 성공", Toast.LENGTH_SHORT).show();
+                             setResult(RESULT_OK);
+                             finish();
+                         } else {
+                             Toast.makeText(NewPostActivity.this, "수정 실패: " + respBody, Toast.LENGTH_LONG).show();
+                         }
+                     });
 
                 } else {
                     MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
@@ -238,9 +235,6 @@ public class NewPostActivity extends AppCompatActivity {
                     RequestBody requestBody = builder.build();
                     Request.Builder reqBuilder = new Request.Builder().url(url);
                     reqBuilder.post(requestBody);
-                    if (token != null) {
-                        reqBuilder.header("Authorization", "Token " + token);
-                    }
 
                     Request request = reqBuilder.build();
 
